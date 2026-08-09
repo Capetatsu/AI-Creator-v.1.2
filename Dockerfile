@@ -9,7 +9,7 @@
 # container recreation:
 #   docker run -p 3001:3001 -v ai-creator-data:/app/backend autonomous-ai-creator
 
-FROM node:22.5-slim
+FROM node:24-slim
 
 WORKDIR /app
 
