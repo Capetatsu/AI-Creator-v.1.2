@@ -58,6 +58,38 @@ function createPost({ agentId, text, rationale, sources }) {
 }
 
 /**
+ * Inserts a new agent row into SQLite and returns its generated id.
+ * Pulled out of the /init handler so backend/routes/control.js (the
+ * merged control-server routes) can create an agent row the same way,
+ * without going through this router's HTTP layer or auto-starting a
+ * loopManager loop for it (the control routes run their own scheduler).
+ *
+ * @param {{name:string, domain:string, tone?:string, audience?:string, frequencyMinutes?:number, contentStyle?:string}} persona
+ * @returns {string} the new agent's id
+ */
+function insertAgent(persona) {
+  const { name, domain, tone, audience, frequencyMinutes, contentStyle } = persona;
+  const agentId = uuidv4();
+  const createdAt = new Date().toISOString();
+
+  db.prepare(
+    `INSERT INTO agents (id, name, domain, tone, audience, frequencyMinutes, contentStyle, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    agentId,
+    name,
+    domain,
+    tone || null,
+    audience || null,
+    frequencyMinutes || null,
+    contentStyle || null,
+    createdAt
+  );
+
+  return agentId;
+}
+
+/**
  * POST /api/agent/init
  * Creates a new agent and returns its generated id.
  *
@@ -73,7 +105,7 @@ router.post("/init", (req, res) => {
     return res.status(400).json({ error: "persona object is required" });
   }
 
-  const { name, domain, tone, audience, frequencyMinutes, contentStyle } = persona;
+  const { name, domain, frequencyMinutes } = persona;
 
   if (!name || typeof name !== "string") {
     return res.status(400).json({ error: "persona.name is required and must be a string" });
@@ -87,29 +119,14 @@ router.post("/init", (req, res) => {
     return res.status(400).json({ error: "persona.frequencyMinutes must be a positive number when provided" });
   }
 
-  const agentId = uuidv4();
-  const createdAt = new Date().toISOString();
-
   try {
-    db.prepare(
-      `INSERT INTO agents (id, name, domain, tone, audience, frequencyMinutes, contentStyle, createdAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      agentId,
-      name,
-      domain,
-      tone || null,
-      audience || null,
-      frequencyMinutes || null,
-      contentStyle || null,
-      createdAt
-    );
+    const agentId = insertAgent(persona);
 
     // THE FIX: initialization alone is enough to start autonomous
     // operation. No frontend, no /api/control/create, no manual
     // `node agent.js` required — the evaluator's documented flow
     // (POST /init once, then poll GET /feed) now actually works.
-    getLoopManager().startLoopForAgent(agentId, { name, domain, tone, audience, frequencyMinutes, contentStyle });
+    getLoopManager().startLoopForAgent(agentId, persona);
 
     return res.status(201).json({ agentId });
   } catch (err) {
@@ -187,3 +204,4 @@ router.get("/feed", (req, res) => {
 
 module.exports = router;
 module.exports.createPost = createPost;
+module.exports.insertAgent = insertAgent;

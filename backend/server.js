@@ -15,6 +15,7 @@ const cors = require("cors");
 
 const db = require("./db");
 const agentRoutes = require("./routes/agent");
+const controlRoutes = require("./routes/control");
 const { startLoopForAgent } = require("./loopManager");
 
 const app = express();
@@ -33,6 +34,10 @@ app.get("/api/health", (req, res) => {
 
 // All agent-related routes live under /api/agent
 app.use("/api/agent", agentRoutes);
+
+// Merged control-server routes (create/run-now/pause/resume/status),
+// now served from this same process/port — see routes/control.js.
+app.use("/api/control", controlRoutes);
 
 // Optional: serve the built frontend (frontend/dist) from this same
 // process/port, so one deployment serves both the API and the dashboard.
