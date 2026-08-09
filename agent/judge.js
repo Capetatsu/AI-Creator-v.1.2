@@ -7,6 +7,24 @@
 // system a second-year student can read top to bottom.
 
 const { isDuplicate, keywordsOf } = require("./memory");
+const { domainKeywordSet } = require("./domainTopics");
+
+// NOTE: keywordsOf() from memory.js deliberately strips very common
+// words (including "ai", "new", "using") because for *duplicate
+// detection* those words are noise that would make unrelated posts look
+// similar. But for *domain relevance* those same words can be exactly
+// the signal we need (an "AI" agent's domain keyword set literally
+// contains "ai"). So relevance matching uses its own, non-stripping
+// tokenizer instead of reusing memory's dedup-tuned keywordsOf().
+function relevanceTokens(text) {
+  return new Set(
+    (text || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean)
+  );
+}
 
 // A candidate must clear this bar just to be considered "publishable"
 // content, independent of how it scores against other candidates.
@@ -25,17 +43,40 @@ function meetsQualityBar(candidate) {
 }
 
 /**
+ * Whether a candidate actually belongs to the agent's configured domain.
+ * Uses the same domain->keyword mapping as discovery.js (via
+ * domainTopics.js) plus any specific words in persona.domain/name itself,
+ * so e.g. a "gaming"/"Valorant" agent only accepts gaming-flavored
+ * candidates and a generic AI data-center story is rejected outright
+ * rather than merely scored lower.
+ *
+ * This is a HARD filter, not a bonus: candidates that fail it are removed
+ * from consideration entirely in selectTopic(), regardless of how fresh
+ * or popular they are.
+ */
+function isRelevantToDomain(candidate, persona) {
+  if (!persona || !persona.domain) return true; // no domain configured, nothing to filter against
+  const { words } = domainKeywordSet(persona);
+  if (words.size === 0) return true;
+  const titleWords = relevanceTokens(candidate.title);
+  for (const word of words) {
+    if (titleWords.has(word)) return true;
+  }
+  return false;
+}
+
+/**
  * Small relevance bonus when the candidate's title shares keywords with
  * the agent's configured domain (e.g. persona.domain = "security news").
- * Not a hard requirement (discovery is already domain-scoped upstream),
- * but it rewards candidates that are a closer editorial fit.
+ * Candidates reaching this point have already passed isRelevantToDomain(),
+ * so this just rewards a closer editorial fit among relevant candidates.
  */
 function domainRelevanceBonus(candidate, persona) {
   if (!persona || !persona.domain) return 0;
-  const domainWords = keywordsOf(persona.domain);
-  const titleWords = keywordsOf(candidate.title);
+  const { words } = domainKeywordSet(persona);
+  const titleWords = relevanceTokens(candidate.title);
   let overlap = 0;
-  for (const word of domainWords) {
+  for (const word of words) {
     if (titleWords.has(word)) overlap += 1;
   }
   return overlap > 0 ? 15 : 0;
@@ -99,7 +140,19 @@ function selectTopic(agentId, candidates, persona) {
     };
   }
 
-  const ranked = fresh
+  // Hard domain filter: reject anything that isn't actually about this
+  // agent's domain, rather than letting an off-topic story win just
+  // because nothing better was discovered this cycle.
+  const relevant = fresh.filter((c) => isRelevantToDomain(c, persona));
+  if (relevant.length === 0) {
+    return {
+      status: "REJECTED",
+      topic: null,
+      reason: `No candidates matched the agent's domain (${(persona && persona.domain) || "unknown"})`,
+    };
+  }
+
+  const ranked = relevant
     .map((c) => ({ ...c, _score: scoreCandidate(c, persona) }))
     .sort((a, b) => b._score - a._score);
 
@@ -116,4 +169,4 @@ function selectTopic(agentId, candidates, persona) {
   return { status: "SELECTED", topic: best, reason: null };
 }
 
-module.exports = { selectTopic, scoreCandidate, meetsQualityBar, MIN_SCORE, MIN_TITLE_LENGTH };
+module.exports = { selectTopic, scoreCandidate, meetsQualityBar, isRelevantToDomain, MIN_SCORE, MIN_TITLE_LENGTH };

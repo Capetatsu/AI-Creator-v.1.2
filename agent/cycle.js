@@ -22,8 +22,8 @@ const backend = require("./backend");
 async function runCycle(agentId, persona, onEvent) {
   const log = onEvent || (() => {});
 
-  log("DISCOVERY", "Searching for candidate topics");
-  const candidates = await discoverTopics();
+  log("DISCOVERY", `Searching for candidate topics (domain: ${persona && persona.domain})`);
+  const candidates = await discoverTopics(persona);
   log("DISCOVERY", `Found ${candidates.length} candidates`);
 
   log("MEMORY", "Checking previous posts for repeats");

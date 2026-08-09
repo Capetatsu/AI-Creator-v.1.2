@@ -7,6 +7,8 @@
 // deterministic keyword parser so this feature works with zero setup —
 // same fallback philosophy as writer.js's mockWrite().
 
+const { resolveDomainCategory } = require("./domainTopics");
+
 const AI_API_URL = process.env.AI_API_URL || "https://api.groq.com/openai/v1/chat/completions";
 const AI_API_KEY = process.env.AI_API_KEY || "";
 const AI_MODEL = process.env.AI_MODEL || "llama-3.1-8b-instant";
@@ -159,15 +161,15 @@ function planWithFallback(prompt) {
   const frequencyMinutes = parsedFrequency !== null ? parsedFrequency : DEFAULTS.frequencyMinutes;
 
   // --- domain ---
-  let domain = DEFAULTS.domain;
-  if (/\bai\b/.test(lower) || lower.includes("artificial intelligence")) {
-    domain = "AI news";
-  }
-  if (lower.includes("crypto")) domain = "cryptocurrency news";
-  if (lower.includes("startup")) domain = "startup news";
-  if (lower.includes("sport")) domain = "sports news";
-  if (lower.includes("science")) domain = "science news";
-  if (lower.includes("security")) domain = "security news";
+  // Uses the same domainTopics classifier that discovery.js and judge.js
+  // use, so whatever domain the planner assigns here is guaranteed to be
+  // something discovery can actually search for and judge can actually
+  // filter against (this is what adds gaming/Valorant, crypto, sports,
+  // science, security, finance, health, entertainment, and AI as
+  // recognized fallback domains, instead of just AI/crypto/startup/
+  // sport/science/security with no gaming handling at all).
+  const category = resolveDomainCategory(prompt);
+  const domain = category.key === "general" ? DEFAULTS.domain : category.label;
 
   // --- tone ---
   const toneWords = [];
