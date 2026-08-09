@@ -1,0 +1,22 @@
+{
+  "name": "autonomous-ai-creator",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Autonomous AI Creator — backend (API + autonomous loop), agent pipeline, and React dashboard.",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix agent && npm install --prefix frontend",
+    "build:frontend": "npm run build --prefix frontend",
+    "start": "node backend/server.js",
+    "start:backend": "node backend/server.js",
+    "start:control": "node agent/control-server.js",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev": "concurrently -n backend,control,frontend -c blue,green,magenta \"npm:start:backend\" \"npm:start:control\" \"npm:dev:frontend\"",
+    "postinstall": "echo Run 'npm run install:all' next to install backend/agent/frontend dependencies."
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

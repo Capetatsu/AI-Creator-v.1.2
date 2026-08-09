@@ -1,0 +1,43 @@
+# Deploys ONE web service for the whole app.
+#
+# The backend (backend/server.js) is the service that gets deployed: it
+# exposes the required evaluator API (/api/agent/init, /api/agent/feed),
+# runs the autonomous agent loop in-process, AND serves the built
+# frontend (frontend/dist) if the build step below has run — so the
+# evaluator gets one URL that serves both the API and the dashboard.
+#
+# Import this file in Render as a Blueprint, or copy the equivalent
+# settings into any other Node-friendly host (Railway, Fly.io, etc.):
+#   Build command: see `buildCommand` below
+#   Start command: node backend/server.js
+#   Node version:  >= 22.5.0  (required for backend/db.js's `node:sqlite`)
+#
+# Notes on persistence: SQLite is stored at backend/database.sqlite on
+# local disk. On most PaaS free tiers the filesystem is ephemeral across
+# deploys (but NOT across simple restarts/crashes within the same
+# deploy) — for a real production deployment, attach a persistent disk
+# and point DB storage at it, or swap in a hosted database. For the
+# hackathon's 48-hour evaluation window this is not expected to matter
+# unless the host redeploys mid-evaluation.
+
+services:
+  - type: web
+    name: autonomous-ai-creator
+    env: node
+    plan: free
+    buildCommand: >
+      npm install --prefix backend &&
+      npm install --prefix frontend &&
+      npm run build --prefix frontend
+    startCommand: node backend/server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 22.5.0
+      - key: PORT
+        value: 3001
+      - key: AI_API_URL
+        sync: false
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        sync: false
